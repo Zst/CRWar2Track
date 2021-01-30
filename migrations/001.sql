@@ -2,6 +2,7 @@ CREATE TABLE player (
 	id SERIAL PRIMARY KEY,
 	tag VARCHAR ( 12 ) UNIQUE NOT NULL,
 	name VARCHAR ( 50 ) NOT NULL,
+	discord_id VARCHAR ( 50 ) NULL,
 	is_in_clan BOOL NOT NULL DEFAULT True
 );
 

@@ -151,9 +151,9 @@ def print_who_has_incomplete_games(player_stats):
 start_time = get_war_start_prefix()
 # warStartTime = "20210125T0930"
 # warStartTime = "20210127T1000"
-print("War day start is: %s" % start_time)
+# print("War day start is: %s" % start_time)
 
 pss = get_player_stats(cr.report_clan_tag, start_time)
 db.mark_leavers([pss[p].id for p in pss if pss[p].id is not None])
 
-print_who_has_incomplete_games(pss)
+# print_who_has_incomplete_games(pss)
