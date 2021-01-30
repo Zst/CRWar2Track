@@ -132,3 +132,5 @@ dmypy.json
 # Specific to the CRWar project:
 auth.txt
 scratch.txt
+
+.idea
