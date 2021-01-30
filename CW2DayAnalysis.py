@@ -3,10 +3,11 @@
 
 from datetime import datetime, timedelta
 
+import db
 import crlib as cr
 import requests
 
-riverClanTags = ["JP8VUC", "2Q9JYY9J", cr.clan_tag, "29R0YQ09", "8UUP909U"]
+riverClanTags = ["JP8VUC", "2Q9JYY9J", cr.report_clan_tag, "29R0YQ09", "8UUP909U"]
 
 
 class ClanData:
@@ -18,6 +19,7 @@ class ClanData:
 # The stats for a single player, war day won, lost, 
 class PlayerStats:
     def __init__(self):
+        self.id = None
         self.name = ""
         self.battles_won = 0
         self.battles_played = 0
@@ -68,7 +70,7 @@ def populate_war_games(player_tag, war_start_time, player):
         if ((battle_type == "riverRaceDuel"
              or battle_type == "riverRaceDuelColosseum"
              or battle_type == "riverRacePvP"
-             or battle_type == "boatBattle") and war_start_time < b["battleTime"]):
+             or battle_type == "boatBattle")):
             # print (json.dumps(b, indent = 2))
             # print("%s %s"%(b["battleTime"], b["type"]))
 
@@ -81,19 +83,29 @@ def populate_war_games(player_tag, war_start_time, player):
                 #       cr.getPlayerName(playerTag),defenderCrown, opponentCrown))
                 # print("Team Card length:%s" % len(b["team"][0]["cards"]))
                 game_count = len(b["team"][0]["cards"]) / 8
-                if defender_crown > opponent_crown:  # won the duel
-                    player[player_tag].battles_won += game_count
-                player[player_tag].battles_played += game_count
+
+                if war_start_time < b["battleTime"]:
+                    if defender_crown > opponent_crown:  # won the duel
+                        player[player_tag].battles_won += game_count
+                    player[player_tag].battles_played += game_count
+
+                db.save_battle(player[player_tag].id, b["battleTime"], game_count,
+                               game_count if defender_crown > opponent_crown else 0, 0)
             elif battle_type == "riverRacePvP":
                 defender_crown = b["team"][0]["crowns"]
                 opponent_crown = b["opponent"][0]["crowns"]
-                if defender_crown > opponent_crown:  # won the battle
-                    player[player_tag].battles_won += 1
-                player[player_tag].battles_played += 1
+                if war_start_time < b["battleTime"]:
+                    if defender_crown > opponent_crown:  # won the battle
+                        player[player_tag].battles_won += 1
+                    player[player_tag].battles_played += 1
 
+                db.save_battle(player[player_tag].id, b["battleTime"], 1,
+                               1 if defender_crown > opponent_crown else 0, 0)
             else:  # boatBattle
-                player[player_tag].battles_played += 1
-                player[player_tag].boat_attacks += 1
+                if war_start_time < b["battleTime"]:
+                    player[player_tag].battles_played += 1
+                    player[player_tag].boat_attacks += 1
+                db.save_battle(player[player_tag].id, b["battleTime"], 1, 0, 0)
 
 
 # Iterate through clan members, collect clan level stats, incomplete games, player stats
@@ -103,6 +115,8 @@ def get_player_stats(ct, war_start_time):
     for m in cr.clan_member_tags(ct):
         if m not in ps:
             ps[m] = PlayerStats()
+            ps[m].name = cr.get_player_name(m)
+            ps[m].id = db.get_player_id(m, ps[m].name)
         populate_war_games(m, war_start_time, ps)
     return ps
 
@@ -139,5 +153,7 @@ start_time = get_war_start_prefix()
 # warStartTime = "20210127T1000"
 print("War day start is: %s" % start_time)
 
-pss = get_player_stats(cr.clan_tag, start_time)
+pss = get_player_stats(cr.report_clan_tag, start_time)
+db.mark_leavers([pss[p].id for p in pss if pss[p].id is not None])
+
 print_who_has_incomplete_games(pss)

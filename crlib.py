@@ -2,7 +2,7 @@
 import requests
 import sys
 
-clan_tag = "YJCGRV9"  # Heavyweights
+report_clan_tag = "YJCGRV9"  # Heavyweights
 
 
 def load_auth():
