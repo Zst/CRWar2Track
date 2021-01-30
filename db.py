@@ -1,8 +1,10 @@
 import datetime
-
 import sys
+
 import psycopg2
 from decouple import config
+
+from utils import log, err
 
 query_mark_leavers = "UPDATE player SET is_in_clan = false WHERE id NOT IN (%s)"
 query_insert_player = """
@@ -18,6 +20,19 @@ query_insert_battle = """
     VALUES (%d, '%s', '%s', %d, %d, %d);
 """
 
+query_get_last_week_stats = """
+    SELECT wb.war_day, SUM(wb.decks_used) as played, SUM(wb.decks_won) as won, p.id as player_id, p.name
+    FROM player p
+    INNER JOIN war_battle wb ON wb.player_id = p.id
+    WHERE wb.war_day >= '%s'
+    GROUP BY p.id, wb.war_day
+    ORDER BY p.is_in_clan, p.id, wb.war_day
+"""
+
+query_copy_wrapper = """
+    COPY (%s) TO stdout WITH csv HEADER DELIMITER '\t' NULL 'NULL'; 
+"""
+
 
 def get_connection():
     try:
@@ -29,7 +44,7 @@ def get_connection():
             port=config('DB_PORT')
         )
     except:
-        print("Database connection failed, the data will not be saved")
+        log("Database connection failed, the data will not be saved")
         return None
 
 
@@ -60,7 +75,7 @@ def mark_leavers(players_in_clan):
         conn.commit()
     except Exception as e:
         conn.rollback()
-        sys.stderr.write('Cannot mark users out of the clan: ' + str(e))
+        err('Cannot mark users out of the clan: ' + str(e))
 
 
 # returns player id from the database; if record doesn't exist, creates it
@@ -77,7 +92,7 @@ def get_player_id(player_tag, player_name):
         return player_id
     except Exception as e:
         conn.rollback()
-        sys.stderr.write('Cannot get or create user: ' + str(e))
+        err('Cannot get or create user: ' + str(e))
         return None
 
 
@@ -99,4 +114,12 @@ def save_battle(player_id, datetime_string, decks_used, decks_won, fame):
         conn.rollback()
         # we expect duplication errors, will print out everything else
         if 'duplicate' not in str(e):
-            sys.stderr.write('Cannot insert war battle: ' + str(e))
+            err('Cannot insert war battle: ' + str(e))
+
+
+def print_report(cutout_date):
+    if conn is None:
+        return
+    cur = conn.cursor()
+    cur.copy_expert(query_copy_wrapper % (query_get_last_week_stats % cutout_date), sys.stdout)
+    cur.close()

@@ -7,6 +7,8 @@ import db
 import crlib as cr
 import requests
 
+from utils import log
+
 riverClanTags = ["JP8VUC", "2Q9JYY9J", cr.report_clan_tag, "29R0YQ09", "8UUP909U"]
 
 
@@ -41,7 +43,7 @@ def get_war_start_prefix():
 
 
 # Per player gather war battles, and update clan level player stats
-def populate_war_games(player_tag, war_start_time, player):
+def populate_war_games(clan_tag, player_tag, war_start_time, player):
     r2 = requests.get("https://api.clashroyale.com/v1/players/%23" + player_tag + "/battlelog",
                       headers={"Accept": "application/json", "authorization": cr.auth},
                       params={"limit": 100})
@@ -67,10 +69,13 @@ def populate_war_games(player_tag, war_start_time, player):
 
     for b in battles:
         battle_type = b["type"]
-        if ((battle_type == "riverRaceDuel"
-             or battle_type == "riverRaceDuelColosseum"
-             or battle_type == "riverRacePvP"
-             or battle_type == "boatBattle")):
+        # player might have been in a different clan during the war battle,
+        # need to check for that
+        if (battle_type == "riverRaceDuel"
+            or battle_type == "riverRaceDuelColosseum"
+            or battle_type == "riverRacePvP"
+            or battle_type == "boatBattle") \
+                and b["team"][0]["clan"]["tag"] == "#" + clan_tag:
             # print (json.dumps(b, indent = 2))
             # print("%s %s"%(b["battleTime"], b["type"]))
 
@@ -110,15 +115,15 @@ def populate_war_games(player_tag, war_start_time, player):
 
 # Iterate through clan members, collect clan level stats, incomplete games, player stats
 def get_player_stats(ct, war_start_time):
-    ps = dict()
+    players = dict()
 
-    for m in cr.clan_member_tags(ct):
-        if m not in ps:
-            ps[m] = PlayerStats()
-            ps[m].name = cr.get_player_name(m)
-            ps[m].id = db.get_player_id(m, ps[m].name)
-        populate_war_games(m, war_start_time, ps)
-    return ps
+    for pt in cr.clan_member_tags(ct):
+        if pt not in players:
+            players[pt] = PlayerStats()
+            players[pt].name = cr.get_player_name(pt)
+            players[pt].id = db.get_player_id(pt, players[pt].name)
+        populate_war_games(ct, pt, war_start_time, players)
+    return players
 
 
 # Print clan's statistics for the war day (participant numbers, win ratio)
@@ -148,12 +153,36 @@ def print_who_has_incomplete_games(player_stats):
         print("%s: %s %s" % (cr.get_player_name(key), int(value.battles_played), caveat_msg))
 
 
-start_time = get_war_start_prefix()
-# warStartTime = "20210125T0930"
-# warStartTime = "20210127T1000"
-# print("War day start is: %s" % start_time)
+# returns the cutout date for the report
+# current logic: returns previous Sunday (always guaranteed to be at least one day ago)
+def get_first_report_date():
+    dt = datetime.utcnow()
+    if dt.isoweekday == 1:
+        return (dt - timedelta(days=7)).strftime("%Y-%m-%d")
+    else:
+        return (dt - timedelta(days=dt.weekday() + 1)).strftime("%Y-%m-%d")
 
-pss = get_player_stats(cr.report_clan_tag, start_time)
-db.mark_leavers([pss[p].id for p in pss if pss[p].id is not None])
 
-# print_who_has_incomplete_games(pss)
+def report():
+    start_time = get_war_start_prefix()
+    # warStartTime = "20210125T0930"
+    # warStartTime = "20210127T1000"
+    # print("War day start is: %s" % start_time)
+    log("Starting...")
+
+    players = get_player_stats(cr.report_clan_tag, start_time)
+    log("Stats loaded, %d players found" % len(players))
+
+    db.mark_leavers([players[p].id for p in players if players[p].id is not None])
+    log("Marked players no longer in clan")
+
+    cutout_date = get_first_report_date()
+    log("Building report for dates >= " + cutout_date)
+    db.print_report(cutout_date)
+
+    log("Report timestamp: " + datetime.utcnow().strftime("%d-%m-%Y %H:%M:%S"))
+
+    # print_who_has_incomplete_games(pss)
+
+
+report()
