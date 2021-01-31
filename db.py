@@ -1,5 +1,4 @@
 import datetime
-import sys
 
 import psycopg2
 from decouple import config
@@ -24,12 +23,9 @@ QUERY_GET_LAST_WEEK_STATS = """
         p.is_in_clan
     FROM player p
     LEFT JOIN war_battle wb ON wb.player_id = p.id AND wb.war_day >= '%s'
+    WHERE p.is_in_clan OR wb.id != NULL
     GROUP BY p.id, wb.war_day
-    ORDER BY p.is_in_clan, p.id, wb.war_day
-"""
-
-query_copy_wrapper = """
-    COPY (%s) TO stdout WITH csv HEADER DELIMITER '\t' NULL 'NULL'; 
+    ORDER BY p.is_in_clan DESC, p.id, wb.war_day
 """
 
 
@@ -42,8 +38,8 @@ def get_connection():
             host='127.0.0.1',
             port=config('DB_PORT')
         )
-    except:
-        log("Database connection failed, the data will not be saved")
+    except Exception as e:
+        log('Database connection failed, the data will not be saved: ' + str(e))
         return None
 
 
@@ -116,14 +112,6 @@ def save_battle(player_id, datetime_string, decks_used, decks_won, fame):
             err('Cannot insert war battle: ' + str(e))
 
 
-def print_report(cutout_date):
-    if conn is None:
-        return
-    cur = conn.cursor()
-    cur.copy_expert(query_copy_wrapper % (QUERY_GET_LAST_WEEK_STATS % cutout_date), sys.stdout)
-    cur.close()
-
-
 # returns two-dimensional array for export. Format:
 # [[Report date][<datetime>]]
 # [[Player][Played <date (Sun)>][Won <date (Sun)>]...[Played <date (today)>][Won <date (today)>]]
@@ -151,13 +139,15 @@ def get_report(cutout_date):
 
     set_item(0, 0, 'Last update: ' + today.strftime('%d-%m-%Y %H:%M:%S'))
     # filling in table header
-    for d in range(0, days_in_report):
+    for d in range(days_in_report):
         set_item(0, 1 + d * 2, (cutout_datetime + datetime.timedelta(days=d)).date().strftime('%d-%m-%Y'))
         set_item(1, 1 + d * 2, 'played')
         set_item(1, 1 + d * 2 + 1, 'won')
 
     # iterating through query result, each row is a player's war day
-    row_idx = 1
+    # row_idx = 2 will make it start from row 3 (we increment in the beginning), first 3 rows are reserved
+    # for headers and totals
+    row_idx = 2
     last_player_id = None
     cur = conn.cursor()
     try:
@@ -173,5 +163,22 @@ def get_report(cutout_date):
                 set_item(row_idx, col*2 + 2, row[2])
     finally:
         cur.close()
+
+    # counting totals and averages
+    set_item(2, 0, 'TOTAL')
+    for d in range(days_in_report):
+        day_played = 0
+        day_won = 0
+        for p in range(2, len(res)):
+            try:
+                day_played += res[p][1 + d*2] or 0
+                day_won += res[p][1 + d*2 + 1] or 0
+            except IndexError:
+                pass
+
+        if day_played > 0:
+            # maximum number of battles per clan per day is 50 * 4 = 200, print % of those that are actually played
+            set_item(2, 1 + d * 2, str(round(100 * day_played / 200, 2)) + '%')
+            set_item(2, 1 + d * 2 + 1, str(round(100 * day_won / day_played, 2)) + '%')
 
     return res

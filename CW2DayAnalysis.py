@@ -1,7 +1,9 @@
 # War 2 analysis: going through partner clans and for all check
 # last 25 battles, how many are war, and show win ratio, etc.
-
+import sys
 from datetime import datetime, timedelta
+
+from decouple import config
 
 import db
 import crlib as cr
@@ -10,7 +12,9 @@ import requests
 import spreadsheet
 from utils import log, err
 
-riverClanTags = ["JP8VUC", "2Q9JYY9J", cr.report_clan_tag, "29R0YQ09", "8UUP909U"]
+
+# don't run CR API queries; don't save to Google sheets; print report to stdout
+REPORT_DEBUG = False
 
 
 class ClanData:
@@ -115,15 +119,19 @@ def populate_war_games(clan_tag, player_tag, war_start_time, player):
 
 
 # Iterate through clan members, collect clan level stats, incomplete games, player stats
-def get_player_stats(ct, war_start_time):
+def get_player_stats(ct, war_start_time, persistent_run):
     players = dict()
 
-    for pt in cr.clan_member_tags(ct):
-        if pt not in players:
-            players[pt] = PlayerStats()
-            players[pt].name = cr.get_player_name(pt)
-            players[pt].id = db.get_player_id(pt, players[pt].name)
-        populate_war_games(ct, pt, war_start_time, players)
+    try:
+        for pt in cr.clan_member_tags(ct):
+            if pt not in players:
+                players[pt] = PlayerStats()
+                players[pt].name = cr.get_player_name(pt)
+                if persistent_run:
+                    players[pt].id = db.get_player_id(pt, players[pt].name)
+            populate_war_games(ct, pt, war_start_time, players)
+    except Exception as e:
+        err('Error loading player data: ' + str(e))
     return players
 
 
@@ -166,26 +174,53 @@ def get_first_report_date():
 
 def report():
     start_time = get_war_start_prefix()
-    # warStartTime = "20210125T0930"
-    # warStartTime = "20210127T1000"
-    # print("War day start is: %s" % start_time)
-    log("Starting...")
 
-    players = get_player_stats(cr.report_clan_tag, start_time)
-    log("Stats loaded, %d players found" % len(players))
+    if len(sys.argv) == 2 and sys.argv[1]:
+        log('Running check for clan with tag ' + sys.argv[1])
+        clan_tag = sys.argv[1]
+        persistent_run = False
+    else:
+        log('Updating database and exporting default clan with tag ' + config('CLAN_TAG'))
+        clan_tag = config('CLAN_TAG')
+        persistent_run = True
 
-    db.mark_leavers([players[p].id for p in players if players[p].id is not None])
-    log("Marked players no longer in clan")
+    players = None
+    if not REPORT_DEBUG:
+        players = get_player_stats(clan_tag, start_time, persistent_run)
+        if players:
+            log('Stats loaded, %d players found' % len(players))
+        else:
+            return
 
-    cutout_date = get_first_report_date()
-    log("Report cutout date: " + cutout_date)
-    try:
-        spreadsheet.export_to_sheet(db.get_report(cutout_date))
-        log("Report exported")
-    except Exception as e:
-        err('Cannot export to sheet: ' + str(e))
-    log("Run finished")
-    # print_who_has_incomplete_games(pss)
+        if persistent_run:
+            db.mark_leavers([players[p].id for p in players if players[p].id is not None])
+            log('Marked players no longer in clan')
+    else:
+        log('Report debug mode is ON')
+
+    if persistent_run:
+        cutout_date = get_first_report_date()
+        log('Report cutout date: ' + cutout_date)
+        out = db.get_report(cutout_date)
+        if out is not None:
+            if not REPORT_DEBUG:
+                try:
+                    spreadsheet.export_to_sheet(out)
+                    log('Report exported')
+                except Exception as e:
+                    err('Cannot export report: ' + str(e))
+            else:
+                print(out)
+        else:
+            log('Report is empty, possibly no database')
+            if players is not None:
+                print_who_has_incomplete_games(players)
+    else:
+        if players is not None:
+            print_who_has_incomplete_games(players)
+            print_clan_war_day_stats(clan_tag, players)
+
+    log('Run finished')
 
 
 report()
