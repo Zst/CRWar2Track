@@ -7,7 +7,8 @@ import db
 import crlib as cr
 import requests
 
-from utils import log
+import spreadsheet
+from utils import log, err
 
 riverClanTags = ["JP8VUC", "2Q9JYY9J", cr.report_clan_tag, "29R0YQ09", "8UUP909U"]
 
@@ -177,11 +178,13 @@ def report():
     log("Marked players no longer in clan")
 
     cutout_date = get_first_report_date()
-    log("Building report for dates >= " + cutout_date)
-    db.print_report(cutout_date)
-
-    log("Report timestamp: " + datetime.utcnow().strftime("%d-%m-%Y %H:%M:%S"))
-
+    log("Report cutout date: " + cutout_date)
+    try:
+        spreadsheet.export_to_sheet(db.get_report(cutout_date))
+        log("Report exported")
+    except Exception as e:
+        err('Cannot export to sheet: ' + str(e))
+    log("Run finished")
     # print_who_has_incomplete_games(pss)
 
 
