@@ -83,8 +83,8 @@ def populate_war_games(clan_tag, player_tag, war_start_time, player):
             # opponent -> crowns (compare???), team [0] crowns???
 
             if battle_type == "riverRaceDuel" or battle_type == "riverRaceDuelColosseum":
-                defender_crown = b["team"][0]["crowns"]
-                opponent_crown = b["opponent"][0]["crowns"]
+                defender_crown = b["team"][0]["crowns"] or 0
+                opponent_crown = b["opponent"][0]["crowns"] or 0
                 # print("%s %s by %s  %s:%s"%(b["battleTime"], b["type"],
                 #       cr.getPlayerName(playerTag),defenderCrown, opponentCrown))
                 # print("Team Card length:%s" % len(b["team"][0]["cards"]))
@@ -98,8 +98,8 @@ def populate_war_games(clan_tag, player_tag, war_start_time, player):
                 db.save_battle(player[player_tag].id, b["battleTime"], game_count,
                                game_count if defender_crown > opponent_crown else 0, 0)
             elif battle_type == "riverRacePvP":
-                defender_crown = b["team"][0]["crowns"]
-                opponent_crown = b["opponent"][0]["crowns"]
+                defender_crown = b["team"][0]["crowns"] or 0
+                opponent_crown = b["opponent"][0]["crowns"] or 0
                 if war_start_time < b["battleTime"]:
                     if defender_crown > opponent_crown:  # won the battle
                         player[player_tag].battles_won += 1
