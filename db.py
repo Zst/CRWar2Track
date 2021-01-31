@@ -52,7 +52,7 @@ conn = get_connection()
 
 # determines war day date from the battle timestamp
 def _get_war_day(dt):
-    if dt.time() < datetime.time(9, 30) or (dt.isoweekday == 1 and dt.time() < datetime.time(10)):
+    if dt.time() < datetime.time(10):
         return (dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     else:
         return dt.strftime("%Y-%m-%d")
