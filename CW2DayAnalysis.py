@@ -131,7 +131,7 @@ def get_player_stats(ct, war_start_time, persistent_run):
                     players[pt].id = db.get_player_id(pt, players[pt].name)
             populate_war_games(ct, pt, war_start_time, players)
     except Exception as e:
-        err('Error loading player data: ' + str(e))
+        err('Error loading player data, check API access and clan tag: ' + str(e))
     return players
 
 
@@ -215,6 +215,7 @@ def report():
             log('Report is empty, possibly no database')
             if players is not None:
                 print_who_has_incomplete_games(players)
+                print_clan_war_day_stats(clan_tag, players)
     else:
         if players is not None:
             print_who_has_incomplete_games(players)
