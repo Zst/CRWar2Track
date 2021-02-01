@@ -5,7 +5,7 @@ from decouple import config
 
 from utils import log, err
 
-QUERY_MARK_LEAVERS = "UPDATE player SET is_in_clan = false WHERE id NOT IN (%s)"
+QUERY_MARK_LEAVERS = "UPDATE player SET is_in_clan = id IN (%s);"
 QUERY_INSERT_PLAYER = """
     INSERT INTO player (tag, name) VALUES ('%s', '%s')
     ON CONFLICT (tag) 
