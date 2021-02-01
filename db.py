@@ -167,21 +167,21 @@ def get_report(cutout_date):
     # counting totals and averages
     set_item(2, 0, 'TOTAL')
     for d in range(days_in_report):
-        day_played = 0
-        day_won = 0
+        day_battles_played = 0
+        day_battles_won = 0
         day_players = 0
         for p in range(2, len(res)):
             try:
-                day_played += res[p][1 + d*2] or 0
-                day_won += res[p][1 + d*2 + 1] or 0
-                if day_players:
-                    day_played += 1
+                day_battles_played += res[p][1 + d*2] or 0
+                day_battles_won += res[p][1 + d*2 + 1] or 0
+                if day_battles_played:
+                    day_players += 1
             except IndexError:
                 pass
 
-        if day_played > 0:
+        if day_battles_played > 0:
             # maximum number of battles per clan per day is 50 * 4 = 200, print % of those that are actually played
-            set_item(2, 1 + d * 2, str(round(100 * day_played / 200, 2)) + '% (' + str(day_played) + ')')
-            set_item(2, 1 + d * 2 + 1, str(round(100 * day_won / day_played, 2)) + '%')
+            set_item(2, 1 + d * 2, str(round(100 * day_battles_played / 200, 2)) + '% (' + str(day_players) + ')')
+            set_item(2, 1 + d * 2 + 1, str(round(100 * day_battles_won / day_battles_played, 2)) + '%')
 
     return res
