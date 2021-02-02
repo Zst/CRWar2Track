@@ -72,8 +72,8 @@ def _save_battle(player, cr_timestamp, battles, won):
 # Per player gather war battles, and update clan level player stats
 def populate_war_games(clan_tag, player_tag, war_start_time, player):
     def get_towers_count(t):
-        return 1 if "kingTowerHitPoints" in t and t["kingTowerHitPoints"] else 0 + \
-            len(t["princessTowersHitPoints"]) if "princessTowersHitPoints" in t else 0
+        return (1 if "kingTowerHitPoints" in t and t["kingTowerHitPoints"] else 0) + \
+               (len(t["princessTowersHitPoints"]) if "princessTowersHitPoints" in t else 0)
 
     r2 = requests.get("https://api.clashroyale.com/v1/players/%23" + player_tag + "/battlelog",
                       headers={"Accept": "application/json", "authorization": cr.auth},
