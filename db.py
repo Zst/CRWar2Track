@@ -28,6 +28,34 @@ QUERY_GET_LAST_WEEK_STATS = """
     ORDER BY p.is_in_clan DESC, p.id, wb.war_day
 """
 
+QUERY_CLEAR_NOTIFICATION_IDS = 'UPDATE player SET discord_id = NULL;'
+
+QUERY_UPDATE_PLAYER_NOTIFICATION_ID = """
+    UPDATE player
+    SET discord_id = '%s', is_mini = %s
+    WHERE tag = '%s';
+"""
+
+QUERY_GET_WAR_DAY_STATS = """
+    SELECT count(players) as players, sum(played) as played, sum(won) as won 
+    FROM (
+        SELECT count(*) as players, sum(decks_used) as played, sum(decks_won) as won
+        FROM war_battle
+        WHERE war_day = '%s'
+        GROUP BY player_id
+    ) as p
+"""
+
+QUERY_GET_WAR_DAY_PLAYER_STATS = """
+    SELECT p.name, p.discord_id, p.is_in_clan, p.is_mini, SUM(COALESCE(wb.decks_used, 0)) as used
+    FROM player p
+    LEFT JOIN war_battle wb ON wb.player_id = p.id AND wb.war_day = '%s'
+    WHERE p.is_in_clan OR wb.decks_used is NOT NULL
+    GROUP BY p.id
+    HAVING SUM(COALESCE(wb.decks_used, 0)) < 4
+    ORDER BY 5;
+"""
+
 
 def get_connection():
     try:
@@ -46,31 +74,39 @@ def get_connection():
 conn = get_connection()
 
 
-# determines war day date from the battle timestamp
-def _get_war_day(dt):
-    if dt.time() < datetime.time(10):
-        return (dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    else:
-        return dt.strftime("%Y-%m-%d")
-
-
-# parses datetime format of the CR API
-def _parse_cr_date(datetime_string):
-    return datetime.datetime.strptime(datetime_string, '%Y%m%dT%H%M%S.%fZ')
-
-
-# marks players not listed in the `players_in_clan` list as the ones not currently in clan
-def mark_leavers(players_in_clan):
+def _execute_query(query_str, ignore_duplication_errors=False):
     if conn is None:
         return
     cur = conn.cursor()
     try:
-        cur.execute(QUERY_MARK_LEAVERS % ','.join(str(p) for p in players_in_clan))
+        cur.execute(query_str)
         cur.close()
         conn.commit()
     except Exception as e:
         conn.rollback()
-        err('Cannot mark users out of the clan: ' + str(e))
+        if not ignore_duplication_errors or 'duplicate' not in str(e):
+            err('Cannot execute database query: ' + str(e))
+
+
+def _fetch_query(query_str):
+    if conn is None:
+        return None
+    cur = conn.cursor()
+    res = None
+    try:
+        cur.execute(query_str)
+        res = cur.fetchall()
+    except Exception as e:
+        err('Cannot get run select query: ' + str(e))
+        return res
+    finally:
+        cur.close()
+    return res
+
+
+# marks players not listed in the `players_in_clan` list as the ones not currently in clan
+def mark_leavers(players_in_clan):
+    _execute_query(QUERY_MARK_LEAVERS % ','.join(str(p) for p in players_in_clan))
 
 
 # returns player id from the database; if record doesn't exist, creates it
@@ -94,22 +130,26 @@ def get_player_id(player_tag, player_name):
 # saves database record for a war battle; if player_id is None, does nothing
 # if a record with the same timestamp exists for a user, does nothing (assume two different battles
 # cannot happen at the same time for the same player)
-def save_battle(player_id, datetime_string, decks_used, decks_won, fame):
-    if conn is None or player_id is None:
-        return
-    dt = _parse_cr_date(datetime_string)
-    war_day = _get_war_day(dt)
-    cur = conn.cursor()
-    try:
-        cur.execute(QUERY_INSERT_BATTLE % (player_id, dt, war_day, decks_used, decks_won, fame))
-        cur.close()
-        # a little wasteful to commit after each insert, will make it more efficient later
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        # we expect duplication errors, will print out everything else
-        if 'duplicate' not in str(e):
-            err('Cannot insert war battle: ' + str(e))
+def save_battle(player_id, timestamp, war_day, decks_used, decks_won, fame):
+    _execute_query(QUERY_INSERT_BATTLE % (player_id, timestamp, war_day, decks_used, decks_won, fame), True)
+
+
+def reset_notification_ids():
+    _execute_query(QUERY_CLEAR_NOTIFICATION_IDS)
+
+
+def set_player_notification_id(player_tag, notification_id, is_mini):
+    _execute_query(QUERY_UPDATE_PLAYER_NOTIFICATION_ID % (notification_id.replace("'", "\\'"),
+                                                          is_mini,
+                                                          player_tag.replace("'", "\\'")))
+
+
+def get_war_day_stats(war_day):
+    return _fetch_query(QUERY_GET_WAR_DAY_STATS % war_day)
+
+
+def get_war_day_player_stats(war_day):
+    return _fetch_query(QUERY_GET_WAR_DAY_PLAYER_STATS % war_day)
 
 
 # returns two-dimensional array for export. Format:
@@ -159,8 +199,8 @@ def get_report(cutout_date):
                 set_item(row_idx, 0, row[4] + (' (not in clan)' if not row[5] else ''))
             if row[0] is not None:
                 col = get_day_index(row[0])
-                set_item(row_idx, col*2 + 1, row[1])
-                set_item(row_idx, col*2 + 2, row[2])
+                set_item(row_idx, col * 2 + 1, row[1])
+                set_item(row_idx, col * 2 + 2, row[2])
     finally:
         cur.close()
 
@@ -172,8 +212,8 @@ def get_report(cutout_date):
         day_players = 0
         for p in range(2, len(res)):
             try:
-                day_battles_played += res[p][1 + d*2] or 0
-                day_battles_won += res[p][1 + d*2 + 1] or 0
+                day_battles_played += res[p][1 + d * 2] or 0
+                day_battles_won += res[p][1 + d * 2 + 1] or 0
                 if day_battles_played:
                     day_players += 1
             except IndexError:

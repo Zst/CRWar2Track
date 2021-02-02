@@ -19,3 +19,5 @@ CREATE TABLE war_battle (
 	FOREIGN KEY (player_id)
       REFERENCES player (id)
 );
+
+ALTER TABLE player ADD is_mini BOOL NOT NULL DEFAULT False;
