@@ -23,7 +23,7 @@ QUERY_GET_LAST_WEEK_STATS = """
         p.is_in_clan
     FROM player p
     LEFT JOIN war_battle wb ON wb.player_id = p.id AND wb.war_day >= '%s'
-    WHERE p.is_in_clan OR wb.id != NULL
+    WHERE p.is_in_clan OR wb.id is not NULL
     GROUP BY p.id, wb.war_day
     ORDER BY p.is_in_clan DESC, p.id, wb.war_day
 """

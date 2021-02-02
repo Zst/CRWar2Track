@@ -71,6 +71,10 @@ def _save_battle(player, cr_timestamp, battles, won):
 
 # Per player gather war battles, and update clan level player stats
 def populate_war_games(clan_tag, player_tag, war_start_time, player):
+    def get_towers_count(t):
+        return 1 if "kingTowerHitPoints" in t and t["kingTowerHitPoints"] else 0 + \
+            len(t["princessTowersHitPoints"]) if "princessTowersHitPoints" in t else 0
+
     r2 = requests.get("https://api.clashroyale.com/v1/players/%23" + player_tag + "/battlelog",
                       headers={"Accept": "application/json", "authorization": cr.auth},
                       params={"limit": 100})
@@ -106,10 +110,8 @@ def populate_war_games(clan_tag, player_tag, war_start_time, player):
 
             if battle_type == "riverRaceDuel" or battle_type == "riverRaceDuelColosseum":
                 # we assume that the player that fewer towers at the end of the battle won the whole thing
-                player_towers = 1 if b["team"][0]["kingTowerHitPoints"] else 0 + len(
-                    b["team"][0]["princessTowersHitPoints"])
-                opponent_towers = 1 if b["opponent"][0]["kingTowerHitPoints"] else 0 + len(
-                    b["opponent"][0]["princessTowersHitPoints"])
+                player_towers = get_towers_count(b["team"][0])
+                opponent_towers = get_towers_count(b["opponent"][0])
                 game_count = len(b["team"][0]["cards"]) / 8
 
                 if war_start_time < b["battleTime"]:
@@ -318,7 +320,10 @@ def report():
                 except Exception as e:
                     err('Cannot send notification message: ' + str(e))
             else:
-                log('No webhook url, skipping notification')
+                if config('DISCORD_WEBHOOK'):
+                    log('Notification is not scheduled this time')
+                else:
+                    log('No webhook url, skipping notification')
 
         else:
             log('Report is empty, possibly no database')
