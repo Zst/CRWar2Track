@@ -14,7 +14,7 @@ from utils import log, err
 
 # don't run CR API queries; don't save to Google sheets; print report to stdout
 REPORT_DEBUG = False
-REPORT_HOURS = [16, 18, 20, 8]
+REPORT_HOURS = [17, 19, 22, 9]
 
 
 class ClanData:
