@@ -14,6 +14,7 @@ from utils import log, err
 
 # don't run CR API queries; don't save to Google sheets; print report to stdout
 REPORT_DEBUG = False
+REPORT_HOURS = [16, 18, 20, 8]
 
 
 class ClanData:
@@ -238,8 +239,8 @@ Stats as of %s (%d hours before the war day end):
     else:
         players_report = '*Everybody played their battles. Great job!*'
     return message_template % (now.strftime('%H:%M:%S'),
-                               (datetime.datetime.combine(war_day + datetime.timedelta(days=1),
-                                                          datetime.time(10, 0)) - now).seconds // 3600,
+                               round((datetime.datetime.combine(war_day + datetime.timedelta(days=1),
+                                                                datetime.time(10, 0)) - now).seconds / 3600),
                                day_stats[0][0] or 0,
                                day_stats[0][1] or 0,
                                participation_rate,
@@ -300,7 +301,7 @@ def report():
                 print(out)
 
             # for testing purposes, sending out notification only at 8 o'clock
-            if config('DISCORD_WEBHOOK') and datetime.datetime.utcnow().time().hour == 8:
+            if config('DISCORD_WEBHOOK') and datetime.datetime.utcnow().time().hour in REPORT_HOURS:
                 log('Updating players notification ids')
                 db.reset_notification_ids()
                 try:
