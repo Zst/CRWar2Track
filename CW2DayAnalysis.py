@@ -14,7 +14,7 @@ from utils import log, err
 
 # don't run CR API queries; don't save to Google sheets; print report to stdout
 REPORT_DEBUG = False
-REPORT_HOURS = [17, 19, 22, 8]
+REPORT_HOURS = [] # [17, 19, 22, 8]
 
 
 class ClanData:
@@ -228,7 +228,7 @@ Stats as of %s (%d hours before the war day end):
     else:
         win_rate = 0
 
-    players_report = "Players who didn't finish their war yet:  \n"
+    players_report = "Players who haven't finish their war yet:  \n"
     if player_stats:
         for player in player_stats:
             players_report += '  ' + get_player_mention(player[1], player[0], player[2], player[3])
