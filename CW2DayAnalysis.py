@@ -260,16 +260,16 @@ def send_discord_message(url, message, report_url):
                         })
 
 
-def report():
+def report(notify: bool):
     start_time = _get_war_start_prefix()
 
-    if len(sys.argv) == 2 and sys.argv[1]:
+    if len(sys.argv) >= 2 and sys.argv[1] and not sys.argv[1].startswith('--'):
         log('Running check for clan with tag ' + sys.argv[1])
         clan_tag = sys.argv[1]
         persistent_run = False
     else:
-        log('Updating database and exporting default clan with tag ' + config('CLAN_TAG'))
         clan_tag = config('CLAN_TAG')
+        log(f'Updating database and exporting default clan with tag {clan_tag}')
         persistent_run = True
 
     players = None
@@ -300,8 +300,7 @@ def report():
             else:
                 print(out)
 
-            # for testing purposes, sending out notification only at 8 o'clock
-            if config('DISCORD_WEBHOOK') and datetime.datetime.utcnow().time().hour in REPORT_HOURS:
+            if config('DISCORD_WEBHOOK') and (notify or datetime.datetime.utcnow().time().hour in REPORT_HOURS):
                 log('Updating players notification ids')
                 db.reset_notification_ids()
                 try:
@@ -339,4 +338,5 @@ def report():
     log('Run finished')
 
 
-report()
+if __name__ == '__main__':
+    report('--notify' in sys.argv)
